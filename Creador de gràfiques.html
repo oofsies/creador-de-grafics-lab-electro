@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creador de gràfics</title>
+<style>
+:root{--ink:#1d2433;--mute:#5f6b7f;--line:#d5dae3;--bg:#f3f5f8;--acc:#1f4fa3}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.45 "Segoe UI",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+header{padding:14px 20px;background:var(--acc);color:#fff}
+header h1{margin:0;font-size:18px;font-weight:600}
+main{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:16px;padding:16px;max-width:1400px;margin:auto}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+section{background:#fff;border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-bottom:12px}
+h2{font-size:14px;margin:0 0 8px;font-weight:600}
+table{border-collapse:collapse;width:100%}
+th{font-weight:600;font-size:12px;color:var(--mute);text-align:left;padding:2px 3px}
+td{padding:2px 3px}
+input[type=text],select,textarea{width:100%;padding:5px 6px;border:1px solid var(--line);border-radius:4px;font:inherit;background:#fff}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+textarea{height:70px;font-family:Consolas,monospace;font-size:12px}
+button{font:inherit;padding:6px 10px;border:1px solid var(--acc);background:#fff;color:var(--acc);border-radius:4px;cursor:pointer}
+button.p{background:var(--acc);color:#fff}
+button.x{border-color:var(--line);color:var(--mute);padding:3px 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g4{display:grid;grid-template-columns:auto 1fr 1fr 1fr;gap:6px 8px;align-items:center}
+label.c{display:flex;gap:6px;align-items:center;margin:3px 0}
+small{color:var(--mute)}
+#plot{background:#fff;border:1px solid var(--line);border-radius:6px;padding:8px}
+#plot svg{width:100%;height:auto;display:block}
+pre{margin:0;font:12px/1.5 Consolas,monospace;white-space:pre-wrap;user-select:all}
+#warn{color:#b3261e;margin-top:6px}
+</style>
+</head>
+<body>
+<header><h1>Creador de gràfics</h1></header>
+<main>
+<div>
+  <section>
+    <h2>Dades</h2>
+    <table><thead><tr><th>x</th><th>±x</th><th>y</th><th>±y</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+    <div class="row"><button id="add">Afegeix fila</button><button id="clear" class="x">Esborra-ho tot</button></div>
+    <div style="margin-top:10px"><small>Enganxa des d'Excel / Fulls de càlcul, CSV o text pla (un punt per línia). Es carrega tan bon punt enganxes; les comes decimals funcionen i les capçaleres s'ignoren.</small>
+    <textarea id="paste" placeholder="x, y  (o x, ±x, y, ±y)"></textarea>
+    <div class="row"><select id="pm" style="width:auto"><option value="auto">Columnes: automàtic (segons el nombre)</option><option value="xy">x, y</option><option value="xyy">x, y, ±y</option><option value="full">x, ±x, y, ±y</option><option value="xyxy">x, y, ±x, ±y</option></select><button id="load">Carrega</button></div></div>
+  </section>
+  <section>
+    <h2>Eixos</h2>
+    <div class="g2">
+      <div><small>Nom de X</small><input type="text" id="xl" value="Radi"></div>
+      <div><small>Unitat de X</small><input type="text" id="xu" value="cm"></div>
+      <div><small>Nom de Y</small><input type="text" id="yl" value="Inducció magnètica"></div>
+      <div><small>Unitat de Y</small><input type="text" id="yu" value="mT"></div>
+    </div>
+    <div class="g4" style="margin-top:10px">
+      <span></span><small>Mín.</small><small>Màx.</small><small>Interval</small>
+      <b>X</b><input type="text" id="xmin"><input type="text" id="xmax"><input type="text" id="xstep">
+      <b>Y</b><input type="text" id="ymin"><input type="text" id="ymax"><input type="text" id="ystep">
+    </div>
+    <small>Els valors s'ajusten sols a les dades; escriu-hi per canviar-los. Si deixes una casella buida, torna al valor automàtic.</small><br>
+    <small>Als noms, ^, _ i \ funcionen directament (p. ex. <code>B_x</code>, <code>\mu_0</code>); entre $…$ les lletres surten en cursiva, p. ex. <code>$B_x$</code>, <code>Camp $\mu_0 H$</code>. Les caselles d'unitat accepten matemàtiques sense $: <code>m s^-1</code>, <code>\mu A</code>, <code>\Omega</code>. També: <code>\frac{a}{b}</code>, <code>\cdot \times \pm \circ \theta \mathrm{...}</code>, <code>^{...}</code>, <code>_{...}</code>.</small>
+  </section>
+  <section>
+    <h2>Ajust i llegenda</h2>
+    <label class="c"><input type="checkbox" id="fit" checked> Regressió lineal (utilitza les dues incerteses)</label>
+    <label class="c"><input type="checkbox" id="zero"> Força l'ordenada a l'origen a zero (y = m·x)</label>
+    <label class="c"><input type="checkbox" id="ext"> Allarga la recta a tot l'eix x</label>
+    <label class="c"><input type="checkbox" id="leg" checked> Mostra la llegenda</label>
+    <div class="g2" style="margin-top:6px">
+      <div><small>Text de les dades</small><input type="text" id="ld" value="Punts experimentals"></div>
+      <div><small>Text de l'ajust</small><input type="text" id="lf" value="Ajust"></div>
+      <div><small>Posició de la llegenda</small><select id="lp"><option value="ur">A dalt a la dreta</option><option value="ul">A dalt a l'esquerra</option><option value="lr" selected>A baix a la dreta</option><option value="ll">A baix a l'esquerra</option></select></div>
+      <div><small>Mida de la lletra (px)</small><input type="text" id="fs" value="14"></div>
+    </div>
+    <label class="c"><input type="checkbox" id="grid" checked> Quadrícula puntejada</label>
+  </section>
+</div>
+<div>
+  <div id="plot"></div>
+  <div id="warn"></div>
+  <section style="margin-top:12px">
+    <h2>Desa i exporta</h2>
+    <div class="row" style="margin-top:0">
+      <button class="p" id="dpng">Figura PNG</button><button id="dsvg">Figura SVG</button>
+      <button id="sproj">Desa el projecte (.json)</button><button id="oproj">Obre un projecte o fitxer de dades</button><button id="dcsv">Exporta les dades (.csv)</button>
+      <input type="file" id="file" accept=".json,.csv,.txt,.tsv" hidden>
+    </div>
+    <small>Un fitxer de projecte conserva les dades i tots els paràmetres, per poder-lo reobrir més tard o en una altra pestanya.</small>
+  </section>
+  <section id="fitbox" hidden>
+    <h2>Resultats de l'ajust (per al peu de figura o el text, no per a la llegenda)</h2>
+    <pre id="fitout"></pre>
+  </section>
+</div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const manual={xmin:false,xmax:false,xstep:false,ymin:false,ymax:false,ystep:false};
+let rows=[["3","0.1","0.082","0.02"],["4.2","0.1","0.061","0.02"],["6","0.1","0.041","0.02"]];
+const num=s=>{const v=parseFloat(String(s).trim().replace(",","."));return isFinite(v)?v:NaN};
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+
+function buildRows(){
+  $("rows").innerHTML="";
+  rows.forEach((r,i)=>{
+    const tr=document.createElement("tr");
+    r.forEach((v,j)=>{
+      const td=document.createElement("td"),inp=document.createElement("input");
+      inp.type="text";inp.value=v;inp.setAttribute("aria-label",["x","incertesa de x","y","incertesa de y"][j]+" fila "+(i+1));
+      inp.oninput=()=>{rows[i][j]=inp.value;draw()};
+      td.appendChild(inp);tr.appendChild(td);
+    });
+    const td=document.createElement("td"),b=document.createElement("button");
+    b.textContent="✕";b.className="x";b.title="Elimina la fila";b.onclick=()=>{rows.splice(i,1);buildRows();draw()};
+    td.appendChild(b);tr.appendChild(td);$("rows").appendChild(tr);
+  });
+}
+function data(){
+  return rows.map(r=>({x:num(r[0]),sx:num(r[1])||0,y:num(r[2]),sy:num(r[3])||0}))
+    .filter(p=>isFinite(p.x)&&isFinite(p.y));
+}
+
+function niceStep(range){
+  if(!(range>0))return 1;
+  const raw=range/6,mag=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/mag;
+  return (f<1.5?1:f<3.5?2:f<7.5?5:10)*mag;
+}
+function limits(lo,hi,minS,maxS,stepS){
+  let mn=num(minS),mx=num(maxS),st=num(stepS);
+  if(lo===hi){lo-=1;hi+=1}
+  const as=niceStep(hi-lo);
+  if(!isFinite(mn))mn=Math.floor(lo/as)*as;
+  if(!isFinite(mx))mx=Math.ceil(hi/as)*as;
+  if(mx<=mn)mx=mn+1;
+  if(!(st>0))st=niceStep(mx-mn);
+  return {mn,mx,st};
+}
+function decimals(st){
+  const s=String(parseFloat(st.toPrecision(10)));
+  if(s.includes("e"))return 6;
+  return Math.min(8,(s.split(".")[1]||"").length);
+}
+
+/* Weighted linear fit, effective variance: sigma^2 = sy^2 + (m*sx)^2 */
+function linfit(p,zero){
+  const N=p.length,dof=N-(zero?1:2);
+  if(N<(zero?1:2))return null;
+  const solve=w=>{
+    let S=0,Sx=0,Sy=0,Sxx=0,Sxy=0;
+    p.forEach((q,i)=>{const k=w[i];S+=k;Sx+=k*q.x;Sy+=k*q.y;Sxx+=k*q.x*q.x;Sxy+=k*q.x*q.y});
+    if(zero)return {m:Sxy/Sxx,n:0,dm:Math.sqrt(1/Sxx),dn:0};
+    const D=S*Sxx-Sx*Sx;
+    return {m:(S*Sxy-Sx*Sy)/D,n:(Sxx*Sy-Sx*Sxy)/D,dm:Math.sqrt(S/D),dn:Math.sqrt(Sxx/D)};
+  };
+  let f=solve(p.map(()=>1)),weighted=false,sig=null;
+  if(p.every(q=>q.sy>0||q.sx>0)){
+    for(let it=0;it<20;it++){
+      sig=p.map(q=>Math.sqrt(q.sy**2+(f.m*q.sx)**2));
+      if(sig.some(s=>!(s>0))){sig=null;break}
+      f=solve(sig.map(s=>1/(s*s)));weighted=true;
+    }
+  }
+  const res=p.map(q=>q.y-(f.m*q.x+f.n));
+  const ssr=res.reduce((a,b)=>a+b*b,0),my=p.reduce((a,q)=>a+q.y,0)/N;
+  const sst=zero?p.reduce((a,q)=>a+q.y*q.y,0):p.reduce((a,q)=>a+(q.y-my)**2,0);
+  let chi=null;
+  if(weighted&&sig&&dof>0)chi=res.reduce((a,r,i)=>a+(r/sig[i])**2,0)/dof;
+  if(!weighted){
+    if(dof>0){const s2=ssr/dof;f.dm*=Math.sqrt(s2);f.dn*=Math.sqrt(s2)}
+    else{f.dm=NaN;f.dn=NaN}
+  }
+  return {...f,zero:!!zero,r2:sst>0?1-ssr/sst:NaN,chi,weighted};
+}
+function fmt(v,u){
+  if(!(u>0)||!isFinite(u))return v.toPrecision(6);
+  const e=Math.floor(Math.log10(u)),sig=u/Math.pow(10,e)<3?2:1,d=-(e-sig+1);
+  const dd=Math.max(0,d),r=Math.pow(10,d);
+  return Math.round(v*r)/r===0&&v===0?(0).toFixed(dd)+" ± "+(Math.round(u*r)/r).toFixed(dd)
+    :(Math.round(v*r)/r).toFixed(dd)+" ± "+(Math.round(u*r)/r).toFixed(dd);
+}
+
+function draw(){
+  const p=data(),fs=num($("fs").value)||14;
+  const lab=(n,u)=>{
+    const g=mathSegs(n,"text");
+    if(u.trim())g.push({t:"\u00A0[",i:false,sz:1,off:0},...mathSegs(u,"unit"),{t:"]",i:false,sz:1,off:0});
+    return mt(g,fs);
+  };
+  const XL=lab($("xl").value,$("xu").value),YL=lab($("yl").value,$("yu").value);
+  const W=720,H=540,R=26,T=26,L=Math.max(Math.round(fs*5.2),Math.round(YL.asc+YL.desc+fs*3.6+14)),B=Math.max(Math.round(fs*3.8),Math.round(fs*1.6+XL.asc+XL.desc+8));
+  const pw=W-L-R,ph=H-T-B;
+  let xlo=Infinity,xhi=-Infinity,ylo=Infinity,yhi=-Infinity;
+  p.forEach(q=>{xlo=Math.min(xlo,q.x-q.sx);xhi=Math.max(xhi,q.x+q.sx);ylo=Math.min(ylo,q.y-q.sy);yhi=Math.max(yhi,q.y+q.sy)});
+  if(!p.length){xlo=0;xhi=1;ylo=0;yhi=1}
+  if($("fit").checked&&$("zero").checked&&p.length){xlo=Math.min(xlo,0);xhi=Math.max(xhi,0);ylo=Math.min(ylo,0);yhi=Math.max(yhi,0)}
+  const mv=id=>manual[id]?$(id).value:"";
+  const X=limits(xlo,xhi,mv("xmin"),mv("xmax"),mv("xstep"));
+  const Y=limits(ylo,yhi,mv("ymin"),mv("ymax"),mv("ystep"));
+  const autoFill=(id,v)=>{if(!manual[id]&&document.activeElement!==$(id))$(id).value=String(parseFloat(v.toPrecision(10)))};
+  autoFill("xmin",X.mn);autoFill("xmax",X.mx);autoFill("xstep",X.st);autoFill("ymin",Y.mn);autoFill("ymax",Y.mx);autoFill("ystep",Y.st);
+  const sx=v=>L+(v-X.mn)/(X.mx-X.mn)*pw, sy=v=>T+ph-(v-Y.mn)/(Y.mx-Y.mn)*ph;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Arial, Helvetica, sans-serif" font-size="${fs}">`;
+  s+=`<rect width="${W}" height="${H}" fill="#fff"/><defs><clipPath id="cp"><rect x="${L}" y="${T}" width="${pw}" height="${ph}"/></clipPath></defs>`;
+  // ticks + grid
+  const xd=decimals(X.st),yd=decimals(Y.st),tl=6;
+  let grid="",ticks="",labs="";
+  for(let i=0,v=X.mn;v<=X.mx+X.st*1e-6&&i<200;i++,v=X.mn+i*X.st){
+    const px=sx(v);
+    if($("grid").checked)grid+=`<line x1="${px}" y1="${T}" x2="${px}" y2="${T+ph}" stroke="#bbb" stroke-width="0.7" stroke-dasharray="1 3"/>`;
+    ticks+=`<line x1="${px}" y1="${T+ph}" x2="${px}" y2="${T+ph-tl}"/><line x1="${px}" y1="${T}" x2="${px}" y2="${T+tl}"/>`;
+    labs+=`<text x="${px}" y="${T+ph+fs+6}" text-anchor="middle">${v.toFixed(xd)}</text>`;
+  }
+  for(let i=0,v=Y.mn;v<=Y.mx+Y.st*1e-6&&i<200;i++,v=Y.mn+i*Y.st){
+    const py=sy(v);
+    if($("grid").checked)grid+=`<line x1="${L}" y1="${py}" x2="${L+pw}" y2="${py}" stroke="#bbb" stroke-width="0.7" stroke-dasharray="1 3"/>`;
+    ticks+=`<line x1="${L}" y1="${py}" x2="${L+tl}" y2="${py}"/><line x1="${L+pw}" y1="${py}" x2="${L+pw-tl}" y2="${py}"/>`;
+    labs+=`<text x="${L-8}" y="${py+fs*0.35}" text-anchor="end">${v.toFixed(yd)}</text>`;
+  }
+  s+=grid;
+  // fit
+  const fit=$("fit").checked?linfit(p,$("zero").checked):null;
+  let fitLine="";
+  if(fit){
+    const a=$("ext").checked?X.mn:Math.min(...p.map(q=>q.x)),b=$("ext").checked?X.mx:Math.max(...p.map(q=>q.x));
+    fitLine=`<line x1="${sx(a)}" y1="${sy(fit.m*a+fit.n)}" x2="${sx(b)}" y2="${sy(fit.m*b+fit.n)}" stroke="#d00" stroke-width="1.6" clip-path="url(#cp)"/>`;
+  }
+  s+=fitLine;
+  // points
+  let pts="",out=false;
+  p.forEach(q=>{
+    if(q.x<X.mn||q.x>X.mx||q.y<Y.mn||q.y>Y.mx)out=true;
+    const cx=sx(q.x),cy=sy(q.y),c=3;
+    if(q.sx>0)pts+=`<line x1="${sx(q.x-q.sx)}" y1="${cy}" x2="${sx(q.x+q.sx)}" y2="${cy}"/><line x1="${sx(q.x-q.sx)}" y1="${cy-c}" x2="${sx(q.x-q.sx)}" y2="${cy+c}"/><line x1="${sx(q.x+q.sx)}" y1="${cy-c}" x2="${sx(q.x+q.sx)}" y2="${cy+c}"/>`;
+    if(q.sy>0)pts+=`<line x1="${cx}" y1="${sy(q.y-q.sy)}" x2="${cx}" y2="${sy(q.y+q.sy)}"/><line x1="${cx-c}" y1="${sy(q.y-q.sy)}" x2="${cx+c}" y2="${sy(q.y-q.sy)}"/><line x1="${cx-c}" y1="${sy(q.y+q.sy)}" x2="${cx+c}" y2="${sy(q.y+q.sy)}"/>`;
+    pts+=`<circle cx="${cx}" cy="${cy}" r="3.6" fill="#000" stroke="none"/>`;
+  });
+  s+=`<g clip-path="url(#cp)" stroke="#000" stroke-width="1">${pts}</g>`;
+  // frame (four axes), ticks inwards
+  s+=`<rect x="${L}" y="${T}" width="${pw}" height="${ph}" fill="none" stroke="#000" stroke-width="1.2"/>`;
+  s+=`<g stroke="#000" stroke-width="1">${ticks}</g><g fill="#000">${labs}</g>`;
+  // axis names
+  s+=`<g transform="translate(${L+pw/2-XL.w/2},${H-6-XL.desc})">${XL.svg}</g>`;
+  s+=`<g transform="translate(${Math.max(fs*0.95,YL.asc+4)},${T+ph/2}) rotate(-90) translate(${-YL.w/2},0)">${YL.svg}</g>`;
+  // legend
+  if($("leg").checked){
+    const items=[["d",$("ld").value]];if(fit)items.push(["f",$("lf").value]);
+    const lays=items.map(i=>mt(mathSegs(i[1],"text"),fs)),lh=Math.max(fs*1.5,...lays.map(l=>l.asc+l.desc+4)),wid=Math.max(...lays.map(l=>l.w))+44,hh=items.length*lh+6,pos=$("lp").value;
+    const lx=pos[1]==="r"?L+pw-wid-8:L+10,ly=pos[0]==="u"?T+8:T+ph-hh-8;
+    items.forEach((it,i)=>{
+      const cy=ly+lh*i+lh/2+3;
+      if(it[0]==="d")s+=`<circle cx="${lx+12}" cy="${cy}" r="3.6" fill="#000"/>`;
+      else s+=`<line x1="${lx}" y1="${cy}" x2="${lx+24}" y2="${cy}" stroke="#d00" stroke-width="1.6"/>`;
+      s+=`<g transform="translate(${lx+34},${cy+fs*0.35})">${lays[i].svg}</g>`;
+    });
+  }
+  s+="</svg>";
+  curSvg=s;$("plot").innerHTML=s;
+  $("warn").textContent=out?"Hi ha punts fora dels límits dels eixos.":(p.length?"":"Introdueix almenys un parell (x, y) vàlid.");
+  // fit output
+  $("fitbox").hidden=!fit;
+  if(fit){
+    let t=fit.zero?"y = m·x  (ordenada a l'origen fixada a 0)\n":"y = m·x + n\n";
+    t+=`m = ${fmt(fit.m,fit.dm)}\n`+(fit.zero?"":`n = ${fmt(fit.n,fit.dn)}\n`)+`R² = ${fit.r2.toFixed(5)}`+(fit.zero?" (respecte a l'origen)":"");
+    if(fit.chi!=null)t+=`\nχ²_red = ${fit.chi.toPrecision(3)}`;
+    t+=fit.weighted?"\n(ajust ponderat, utilitza les dues incerteses)":"\n(ajust no ponderat: no hi ha incerteses utilitzables)";
+    $("fitout").textContent=t;
+  }
+}
+
+function download(name,blob){
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+let baseName="figura",curSvg="";
+function saveAs(ext,make){
+  let n=prompt("Desa com a (nom del fitxer):",baseName+ext);
+  if(n===null)return;
+  n=n.trim().replace(/[\\/:*?"<>|]+/g,"_");
+  if(!n)return;
+  if(!n.toLowerCase().endsWith(ext))n+=ext;
+  baseName=n.slice(0,-ext.length)||baseName;
+  make(b=>download(n,b));
+}
+$("dsvg").onclick=()=>saveAs(".svg",cb=>cb(new Blob([curSvg],{type:"image/svg+xml;charset=utf-8"})));
+$("dpng").onclick=()=>saveAs(".png",cb=>{
+  const img=new Image(),sc=3;
+  img.onload=()=>{
+    const c=document.createElement("canvas");c.width=img.width*sc;c.height=img.height*sc;
+    const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(img,0,0,c.width,c.height);
+    c.toBlob(cb);
+  };
+  img.onerror=()=>{$("warn").textContent="No s'ha pogut exportar el PNG. Prova de baixar l'SVG."};
+  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(curSvg);
+});
+$("add").onclick=()=>{rows.push(["","","",""]);buildRows();draw()};
+$("clear").onclick=()=>{rows=[["","","",""]];buildRows();draw()};
+/* ---------- paste / file parsing ---------- */
+const LAY={xy:["x","y"],xyy:["x","y","sy"],full:["x","sx","y","sy"],xyxy:["x","y","sx","sy"]};
+function parseTable(text,mode){
+  const out=[];
+  text.split(/\r?\n/).forEach(raw=>{
+    const line=raw.trim();if(!line)return;
+    const c=(line.includes("\t")?line.split("\t"):line.includes(";")?line.split(";"):/\s/.test(line)?line.split(/\s+/):line.split(",")).map(v=>v.trim());
+    const lay=LAY[mode]||(c.length>=4?LAY.full:c.length===3?LAY.xyy:LAY.xy);
+    const o={x:"",sx:"",y:"",sy:""};
+    lay.forEach((k,i)=>{o[k]=c[i]||""});
+    if(isFinite(num(o.x))&&isFinite(num(o.y)))out.push([o.x,o.sx,o.y,o.sy]);
+  });
+  return out;
+}
+function loadPaste(){
+  const r=parseTable($("paste").value,$("pm").value);
+  if(r.length){rows=r;buildRows();draw()}
+  else $("warn").textContent="No s'han trobat files numèriques. Usa un punt per línia, p. ex. x, y (i les incerteses).";
+}
+$("load").onclick=loadPaste;
+$("paste").addEventListener("paste",()=>setTimeout(loadPaste,0));
+
+/* ---------- project save / open / csv ---------- */
+const IDS=["xl","xu","yl","yu","xmin","xmax","xstep","ymin","ymax","ystep","ld","lf","lp","fs","pm"],CHK=["fit","zero","ext","leg","grid"];
+$("sproj").onclick=()=>{
+  const o={version:2,rows,man:{...manual},v:{},c:{}};
+  IDS.forEach(k=>o.v[k]=$(k).value);CHK.forEach(k=>o.c[k]=$(k).checked);
+  saveAs(".json",cb=>cb(new Blob([JSON.stringify(o,null,1)],{type:"application/json"})));
+};
+$("oproj").onclick=()=>$("file").click();
+$("file").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      if(/\.json$/i.test(f.name)){
+        const o=JSON.parse(rd.result);
+        if(!Array.isArray(o.rows))throw 0;
+        rows=o.rows.map(r=>[0,1,2,3].map(i=>String(r[i]??"")));
+        IDS.forEach(k=>{if(o.v&&k in o.v)$(k).value=o.v[k]});
+        Object.keys(manual).forEach(k=>{manual[k]=o.man?!!o.man[k]:String((o.v&&o.v[k])||"").trim()!==""});
+        CHK.forEach(k=>{if(o.c&&k in o.c)$(k).checked=!!o.c[k]});
+      }else{
+        const r=parseTable(rd.result,"auto");
+        if(!r.length)throw 0;
+        rows=r;
+      }
+      buildRows();draw();
+    }catch(_){$("warn").textContent="No s'ha pogut llegir aquest fitxer."}
+  };
+  rd.readAsText(f);e.target.value="";
+};
+$("dcsv").onclick=()=>{
+  const t="x,x_err,y,y_err\n"+rows.filter(r=>r.some(v=>v!=="")).map(r=>r.map(v=>String(v).replace(",",".")).join(",")).join("\n")+"\n";
+  saveAs(".csv",cb=>cb(new Blob([t],{type:"text/csv"})));
+};
+
+/* ---------- mini math text for SVG: $...$, ^, _, \greek, \mathrm{} ---------- */
+const SYM={alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",eta:"η",theta:"θ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",rho:"ρ",sigma:"σ",tau:"τ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",omega:"ω",ell:"ℓ",hbar:"ħ",
+ Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",
+ cdot:"·",times:"×",pm:"±",mp:"∓",circ:"°",infty:"∞",partial:"∂",nabla:"∇",approx:"≈",neq:"≠",leq:"≤",geq:"≥",to:"→",rightarrow:"→",propto:"∝",sim:"∼",
+ ",":"\u2009",";":"\u2002"," ":"\u00A0"};
+const GL=new Set("alpha beta gamma delta epsilon varepsilon zeta eta theta iota kappa lambda mu nu xi pi rho sigma tau phi varphi chi psi omega ell".split(" "));
+function mathSegs(str,mode){
+  const out=[];let keepHyphen=false;
+  const group=(s,i)=>{let d=0,j=i;for(;j<s.length;j++){if(s[j]==="{")d++;else if(s[j]==="}"&&--d===0)break}return [s.slice(i+1,j),j+1]};
+  const merge=a=>{const r=[];a.forEach(g=>{const l=r[r.length-1];if(l&&!l.frac&&!g.frac&&l.i===g.i&&l.sz===g.sz&&l.off===g.off)l.t+=g.t;else r.push({...g})});return r};
+  const sub=(s,it,sz)=>{const o=[];run(s,it,sz,0,true,o);return merge(o)};
+  function run(s,it,sz,off,math,o){
+    let i=0;
+    while(i<s.length){
+      const c=s[i];
+      if(math&&c==="\\"){
+        const m=/^\\([A-Za-z]+|.)/.exec(s.slice(i));
+        if(!m){i++;continue}
+        const n=m[1];i+=m[0].length;
+        if(/^(mathrm|text|mathit)$/.test(n)&&s[i]==="{"){const r=group(s,i);i=r[1];run(r[0],n==="mathit",sz,off,true,o)}
+        else if(/^[dt]?frac$/.test(n)&&s[i]==="{"){
+          const a=group(s,i);i=a[1];
+          if(s[i]==="{"){const b=group(s,i);i=b[1];o.push({frac:1,sz,off,num:sub(a[0],it,sz*0.8),den:sub(b[0],it,sz*0.8)})}
+        }
+        else if(SYM[n]!==undefined)o.push({t:SYM[n],i:it&&GL.has(n),sz,off});
+        else o.push({t:n,i:false,sz,off});
+      }else if(math&&(c==="^"||c==="_")){
+        i++;let g;
+        if(s[i]==="{"){const r=group(s,i);g=r[0];i=r[1]}
+        else{const m=/^(\\[A-Za-z]+|[+\-−]?\d+(?:\.\d+)?|[+\-−]?[A-Za-z]|.)/.exec(s.slice(i));g=m?m[0]:"";i+=g.length}
+        run(g,it,sz*0.7,off+(c==="^"?0.45:-0.2)*sz,true,o);
+      }else if(math&&(c==="{"||c==="}")){i++}
+      else{
+        o.push({t:math&&c==="-"&&!(keepHyphen&&sz>=1)?"−":c===" "?"\u00A0":c,i:math&&it&&/[A-Za-z]/.test(c),sz,off});i++;
+      }
+    }
+  }
+  if(mode==="unit")run(str.replace(/\$/g,""),false,1,0,true,out);
+  else str.split("$").forEach((p,k)=>{keepHyphen=k%2===0;run(p,k%2===1,1,0,true,out)});
+  return merge(out);
+}
+let _cv=null;
+function tw(t,px,it){
+  try{
+    if(_cv===null)_cv=document.createElement("canvas").getContext("2d")||false;
+    if(_cv){_cv.font=`${it?"italic ":""}${px}px Arial, Helvetica, sans-serif`;const w=_cv.measureText(t).width;if(w>0)return w}
+  }catch(e){_cv=false}
+  return t.length*px*0.55;
+}
+/* positioned layout: baseline at y=0, text starts at x=0 */
+function layout(items,fs,top){
+  let x=0,svg="",asc=top?0.75*fs:0,desc=top?0.22*fs:0;
+  const f=v=>v.toFixed(2);
+  items.forEach(g=>{
+    const px=g.sz*fs;
+    if(g.frac){
+      const A=layout(g.num,fs),D=layout(g.den,fs),pad=0.12*px,bw=Math.max(A.w,D.w)+2*pad;
+      const bar=-(g.off+0.3*g.sz)*fs,gap=0.1*px,nb=bar-gap-A.desc,db=bar+gap+D.asc;
+      svg+=`<g transform="translate(${f(x+(bw-A.w)/2)},${f(nb)})">${A.svg}</g>`;
+      svg+=`<g transform="translate(${f(x+(bw-D.w)/2)},${f(db)})">${D.svg}</g>`;
+      svg+=`<line x1="${f(x+pad*0.4)}" y1="${f(bar)}" x2="${f(x+bw-pad*0.4)}" y2="${f(bar)}" stroke="#000" stroke-width="${f(Math.max(0.8,0.06*px))}"/>`;
+      asc=Math.max(asc,-nb+A.asc);desc=Math.max(desc,db+D.desc);x+=bw;
+    }else{
+      const w=tw(g.t,px,g.i),y=-g.off*fs;
+      svg+=`<text x="${f(x)}" y="${f(y)}" font-size="${f(px)}"${g.i?' font-style="italic"':""}>${esc(g.t)}</text>`;
+      x+=w;asc=Math.max(asc,-y+0.75*px);desc=Math.max(desc,y+0.22*px);
+    }
+  });
+  return {svg,w:x,asc,desc};
+}
+const mt=(items,fs)=>layout(items,fs,true);
+
+Object.keys(manual).forEach(id=>{
+  $(id).addEventListener("input",()=>{manual[id]=$(id).value.trim()!==""});
+  $(id).addEventListener("blur",draw);
+});
+document.querySelectorAll("input[type=text],input[type=checkbox],select").forEach(e=>{
+  if(!e.closest("#rows"))e.addEventListener("input",draw),e.addEventListener("change",draw);
+});
+buildRows();draw();
+</script>
+</body>
+</html>
